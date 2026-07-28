@@ -1,0 +1,17 @@
+# Go build binaries
+/app/backend
+
+# Terraform local state
+.terraform/
+*.tfstate
+*.tfstate.backup
+.terraform.lock.hcl
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# IDE / OS files
+.DS_Store
+.vscode/
+.idea/
