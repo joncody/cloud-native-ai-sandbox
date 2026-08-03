@@ -1,4 +1,4 @@
-# Kubernetes manifests for backend and agent microservices in namespace ai-sandbox
+# Kubernetes Deployment and Service definitions for Go Backend and Python Agent
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -27,7 +27,10 @@ spec:
           value: "http://172.19.0.1:4566"
         - name: S3_BUCKET_NAME
           value: "ai-agent-storage"
+        - name: POSTGRES_URL
+          value: "postgresql://postgres:postgres@postgres-service:5432/aisandbox"
 ---
+# Internal ClusterIP service exposing Python agent on port 5000
 apiVersion: v1
 kind: Service
 metadata:
@@ -66,6 +69,7 @@ spec:
         - name: AGENT_URL
           value: "http://agent-service:5000"
 ---
+# NodePort service exposing Go API Gateway on node port 30080
 apiVersion: v1
 kind: Service
 metadata:

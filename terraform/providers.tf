@@ -1,3 +1,4 @@
+# Provider specifications for HashiCorp AWS and Kubernetes providers
 terraform {
   required_version = ">= 1.6.0"
 
@@ -13,7 +14,7 @@ terraform {
   }
 }
 
-# AWS provider configured for LocalStack simulation
+# AWS provider configured for LocalStack local cloud simulation
 provider "aws" {
   region                      = "us-east-1"
   access_key                  = "mock_key"
@@ -28,7 +29,7 @@ provider "aws" {
   }
 }
 
-# Kubernetes provider configured for local cluster access
+# Kubernetes provider configured for local cluster kubeconfig access
 provider "kubernetes" {
   config_path = "~/.kube/config"
 }

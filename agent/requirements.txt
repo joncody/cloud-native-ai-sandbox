@@ -1,3 +1,23 @@
+# Web framework for microservice HTTP endpoints
 flask==3.0.3
+
+# AWS SDK for Python (used to interact with LocalStack S3)
 boto3==1.34.122
+
+# HTTP client library for calling Ollama REST APIs
 requests==2.32.3
+
+# LangGraph agent orchestration framework
+langgraph>=0.2.20
+
+# Core abstraction primitives for LangChain / LangGraph ecosystem
+langchain-core>=0.2.39
+
+# PostgreSQL database adapter
+psycopg2-binary==2.9.9
+
+# Vector extension helper for psycopg2
+pgvector==0.2.5
+
+# Prometheus client library for metrics collection
+prometheus-client==0.20.0

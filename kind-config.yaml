@@ -1,4 +1,4 @@
-# Kind cluster configuration for the ai-sandbox environment
+# Kind cluster configuration file for the ai-sandbox environment
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 nodes:

@@ -1,17 +1,26 @@
-# Go build binaries
-/app/backend
+# Compiled Go binaries and executable outputs
+backend
+app/backend
+*.exe
+*.out
 
-# Terraform local state
+# Python artifacts and virtual environments
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.egg-info/
+.venv/
+env/
+
+# Terraform / OpenTofu state and lock files
 .terraform/
 *.tfstate
 *.tfstate.backup
 .terraform.lock.hcl
 
-# Python bytecode
-__pycache__/
-*.pyc
-
-# IDE / OS files
+# IDE and operating system files
 .DS_Store
-.vscode/
 .idea/
+.vscode/
+*.log
