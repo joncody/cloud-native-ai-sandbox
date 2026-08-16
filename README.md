@@ -1,165 +1,117 @@
 # Cloud-Native AI Sandbox
 
-A local, zero-cost cloud-native platform demonstrating microservices, Retrieval-Augmented Generation (RAG) with **LangGraph** and **pgvector**, OpenTelemetry observability, **Prometheus** metrics, **LocalStack** cloud simulation, and local LLM orchestration.
+[![Go](https://img.shields.io/badge/Go-1.26+-00ADD8?style=flat&logo=go&logoColor=white)](https://go.dev/)
+[![Python 3.11+](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat&logo=python&logoColor=white)](https://www.python.org/)
+[![Kubernetes](https://img.shields.io/badge/Kubernetes-Kind-326CE5?style=flat&logo=kubernetes&logoColor=white)](https://kind.sigs.k8s.io/)
+[![LangGraph](https://img.shields.io/badge/LangGraph-RAG%20Workflow-FF6F00?style=flat)](https://langchain-ai.github.io/langgraph/)
+[![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Tracing-425CC7?style=flat&logo=opentelemetry&logoColor=white)](https://opentelemetry.io/)
+[![Prometheus](https://img.shields.io/badge/Prometheus-Metrics-E6522C?style=flat&logo=prometheus&logoColor=white)](https://prometheus.io/)
+[![Terraform](https://img.shields.io/badge/Terraform%20/%20OpenTofu-IaC-7B42BC?style=flat&logo=terraform&logoColor=white)](https://opentofu.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+A local, zero-cost, cloud-native platform demonstrating microservices, Retrieval-Augmented Generation (RAG) with **LangGraph** and **pgvector**, OpenTelemetry distributed tracing, **Prometheus** metrics, **LocalStack** simulated AWS cloud infrastructure, and local LLM orchestration.
 
 ---
 
 ## 🏗️ Architecture Overview
 
-```
-                          +-------------------+
-                          |   curl / Client   |
-                          +---------+---------+
-                                    |
-                                    v (POST /prompt)
-                        +-----------+-----------+
-                        |  Go API Gateway       |
-                        |  - Golang 1.26        |
-                        |  - Gin Web Framework  |
-                        |  - OTEL Tracing       |
-                        |  - Prometheus Metrics |
-                        +-----------+-----------+
-                                    |
-                                    v (POST /process)
-                        +-----------+-----------+
-                        |  Python AI Agent      |
-                        |  - LangGraph RAG Engine|
-                        |  - Flask Microservice |
-                        |  - Prometheus Metrics |
-                        +-----+-----+-----+-----+
-                              |     |     |
-            +-----------------+     |     +-----------------+
-            |                       v                       |
-            v                +------+------+                v
-   +--------+-------+        | LocalStack  |       +--------+-------+
-   | PostgreSQL     |        | S3 Bucket   |       | Ollama Engine  |
-   | + pgvector     |        +-------------+       | (Host: 11434)  |
-   | (Vector Store) |                              +----------------+
-   +----------------+
-            ^
-            | (Scrapes /metrics)
-   +--------+-------+
-   | Prometheus     |
-   | Monitoring     |
-   +----------------+
+```mermaid
+flowchart TD
+    Client["Client (curl / HTTP)"] -->|"POST /prompt"| Gateway["Go API Gateway (Gin + OTEL)"]
+    Gateway -->|"POST /process"| Agent["Python AI Agent (Flask + LangGraph)"]
+    
+    subgraph CoreServices ["Core Services & Inference"]
+        Agent -->|"Vector Search & Insert"| PG[("PostgreSQL + pgvector")]
+        Agent -->|"Save Response Artifacts"| LocalStack[("LocalStack S3 Bucket")]
+        Agent -->|"Embeddings & llama3 LLM"| Ollama[("Ollama (Host Port 11434)")]
+    end
+    
+    Prometheus["Prometheus Server (Port 9090)"] -.->|"Scrapes /metrics"| Gateway
+    Prometheus -.->|"Scrapes /metrics"| Agent
 ```
 
-### Components & Microservices
+---
 
-1. **Go API Gateway (`app/main.go`)**:
-   - Built with **Golang 1.26** and **Gin**.
-   - Integrates **OpenTelemetry** stdout trace exporting and **Prometheus** HTTP metrics (`http_requests_total`, `http_request_duration_seconds`).
-   - Listens on port `8080` and exposes `POST /prompt`, `GET /health`, and `GET /metrics`.
+## 🧩 Microservices & Components
 
-2. **Python LangGraph AI Agent (`agent/agent.py`)**:
-   - Built with **Flask** and **LangGraph**.
-   - Executes a stateful 3-node RAG graph workflow:
-     - **`embed_and_retrieve`**: Embeds incoming prompts using Ollama and queries PostgreSQL `pgvector` for vector similarity matches (`<=>` cosine distance operator) to construct contextual memory.
-     - **`generate`**: Invokes the `llama3` model on Ollama with prompt + retrieved RAG context.
-     - **`persist`**: Stores text response files in LocalStack S3 (`ai-agent-storage` bucket) and inserts prompt, response, and 4096-dimensional vector embeddings into PostgreSQL.
-   - Includes automatic database schema initialization with connection retry logic.
-   - Exposes Prometheus metrics (`agent_requests_total`, `agent_graph_node_latency_seconds`) on port `5000`.
+### 1. Go API Gateway (`app/main.go`)
+* Built with **Golang** and **Gin**.
+* Integrates **OpenTelemetry** trace exporting and **Prometheus** HTTP metrics (`http_requests_total`, `http_request_duration_seconds`).
+* Exposes `POST /prompt`, `GET /health`, and `GET /metrics` on port `8080`.
 
-3. **Infrastructure & Observability**:
-   - **PostgreSQL (`pgvector/pgvector:pg16`)**: In-cluster vector similarity database running on port `5432`.
-   - **Prometheus (`prom/prometheus:v2.51.0`)**: In-cluster monitoring server configured via ConfigMap to scrape `/metrics` from both microservices every 5 seconds.
-   - **LocalStack (`3.8.1`)**: Simulated AWS environment running community image on host port `4566`.
-   - **Ollama**: Host-based local LLM execution engine running on host port `11434` (`llama3`).
-   - **Kind Cluster**: Kubernetes v1.29.2 cluster (`ai-sandbox`).
-   - **OpenTofu / Terraform**: Declarative infrastructure configs for namespaces, S3 buckets, and Kubernetes secrets.
+### 2. Python LangGraph AI Agent (`agent/agent.py`)
+* Built with **Flask** and **LangGraph** state machine engine.
+* Executes a stateful 3-node RAG graph:
+  1. **`embed_and_retrieve`**: Embeds incoming queries via Ollama and runs cosine distance vector similarity search (`<=>`) against PostgreSQL `pgvector`.
+  2. **`generate`**: Augments prompt with retrieved context and executes `llama3` inference on Ollama.
+  3. **`persist`**: Stores generated responses to LocalStack S3 (`ai-agent-storage`) and records 4096-dim embeddings to `pgvector`.
+* Exposes node-level Prometheus latency histograms (`agent_graph_node_latency_seconds`) and total counters (`agent_requests_total`).
+
+### 3. Infrastructure & Observability
+* **PostgreSQL (`pgvector/pgvector:pg16`)**: In-cluster vector similarity database.
+* **Prometheus (`prom/prometheus:v2.51.0`)**: In-cluster metrics aggregator configured via ConfigMap to scrape both services every 5 seconds.
+* **LocalStack (`3.8.1`)**: Local AWS cloud emulator exposing simulated S3 APIs on host port `4566`.
+* **Ollama**: Host-level local inference engine running `llama3` on port `11434`.
+* **Kind (Kubernetes in Docker)**: Multi-node local Kubernetes cluster (`ai-sandbox`).
+* **OpenTofu / Terraform**: Declarative infrastructure configs for namespaces, S3 buckets, and secrets.
 
 ---
 
 ## 📁 Repository Structure
 
 ```text
-cloud-native-ai-sandbox/
 ├── agent/
-│   ├── agent.py            # Flask microservice & LangGraph RAG graph workflow
+│   ├── agent.py            # Flask microservice & LangGraph RAG workflow
 │   ├── Dockerfile          # Python 3.11-slim container build definition
-│   └── requirements.txt    # Python dependencies (LangGraph, pgvector, boto3, etc.)
+│   └── requirements.txt    # Python dependencies (LangGraph, pgvector, boto3)
 ├── app/
 │   ├── main.go             # Go API Gateway with OTEL & Prometheus
-│   ├── go.mod              # Go 1.26 module definition
-│   └── Dockerfile          # Multi-stage Go 1.26 build definition
+│   ├── go.mod              # Go module definition
+│   └── Dockerfile          # Multi-stage Go build definition
 ├── k8s/
-│   ├── deploy.yaml         # Deployments & Services for API Gateway and AI Agent
+│   ├── deploy.yaml         # Deployments & Services for Gateway and Agent
 │   ├── postgres.yaml       # Deployment & Service for PostgreSQL + pgvector
-│   └── prometheus.yaml     # ConfigMap, Deployment & NodePort for Prometheus
+│   └── prometheus.yaml     # ConfigMap, Deployment & Service for Prometheus
 ├── terraform/
-│   ├── main.tf             # Terraform resources for Namespace, S3, and Secrets
-│   └── providers.tf        # Provider definitions for LocalStack AWS and Kubernetes
+│   ├── main.tf             # Terraform resources (Namespace, S3, Secrets)
+│   └── providers.tf        # LocalStack AWS & Kubernetes provider configs
 ├── scripts/
-│   └── run.sh              # Build, image loading, rollout verification & port-forwarding
-├── kind-config.yaml        # Kind cluster creation configuration
-├── .gitignore              # Git ignore rules for Go, Python, and Terraform artifacts
-└── README.md               # Architecture and documentation guide
+│   └── run.sh              # Build, image loading, rollout, & port-forwarding
+├── kind-config.yaml        # Kind cluster configuration
+└── README.md
 ```
 
 ---
 
 ## 📋 Prerequisites
 
-- **Ubuntu Linux** host system
-- **Docker Engine** (version 24.0+)
-- **Kind** (version v1.29.2+)
-- **kubectl**
-- **Ollama** service running on host port `11434` with model pulled (`ollama pull llama3`)
-- **AWS CLI**
+* **Linux / macOS** host system
+* **Docker Engine** (v24.0+)
+* **Kind** (v1.29.2+) & **kubectl**
+* **Ollama** running on host port `11434` with model pulled (`ollama pull llama3`)
+* **AWS CLI** (for verifying LocalStack)
 
 ---
 
-## 🚀 Setup & Deployment Guide
+## 🚀 Setup & Deployment
 
-### 1. Firewall Configuration (nftables)
-
-Permit incoming TCP traffic from Docker network subnets in `/etc/nftables.conf`:
-
-```nftables
-	chain INPUT {
-		type filter hook input priority filter; policy drop;
-
-		# Trust loopback and Docker interfaces
-		iifname "lo" accept
-		iifname "docker0" accept
-		iifname "br-*" accept
-	}
-```
-
-Apply firewall rules and restart Docker daemon:
-
+### 1. Launch LocalStack & S3 Bucket
 ```bash
-sudo nft -f /etc/nftables.conf
-sudo systemctl restart docker
-```
-
-> **Note:** Restarting the Docker service immediately after reloading `nftables` is required so Docker can recreate its custom dynamic NAT and container routing iptables chains (`DOCKER` / `POSTROUTING`).
-
----
-
-### 2. Launch LocalStack & Create S3 Bucket
-
-Launch LocalStack AWS simulation on host port `4566` and create the storage bucket:
-
-```bash
-docker rm -f localstack
+docker rm -f localstack 2>/dev/null || true
 docker run -d --name localstack -p 0.0.0.0:4566:4566 localstack/localstack:3.8.1
 
-# Wait for LocalStack initialization
+# Allow container initialization
 sleep 5
 
 AWS_ACCESS_KEY_ID=mock_key AWS_SECRET_ACCESS_KEY=mock_secret AWS_DEFAULT_REGION=us-east-1 \
   aws --endpoint-url=http://localhost:4566 s3 mb s3://ai-agent-storage || true
 ```
 
----
-
-### 3. Build & Deploy Microservices
-
-Run the automated build and deployment script:
-
+### 2. Build & Deploy to Kubernetes
+Run the automated deployment script:
 ```bash
 cd scripts
+chmod +x run.sh
 ./run.sh
 ```
 
@@ -168,43 +120,31 @@ cd scripts
 ## 🧪 Verification & Testing
 
 ### 1. Seed Vector Database with Initial Prompt
-
-Send an initial prompt to generate the first response and persist embeddings in `pgvector`:
-
 ```bash
 curl -X POST http://localhost:8080/prompt \
   -H "Content-Type: application/json" \
   -d '{"prompt": "Explain what Kubernetes pods are in detail."}'
 ```
-*Response will show `"context_retrieved": false` on the first query.*
+*(First query will return `"context_retrieved": false`)*
 
-### 2. Test LangGraph RAG Context Retrieval
-
-Send a follow-up query related to the first prompt. LangGraph will perform vector search in `pgvector` and inject previous knowledge into the prompt context:
-
+### 2. Test LangGraph Vector RAG Context Retrieval
 ```bash
 curl -X POST http://localhost:8080/prompt \
   -H "Content-Type: application/json" \
   -d '{"prompt": "How do containers inside the same pod communicate with each other?"}'
 ```
-*Response will now show `"context_retrieved": true`.*
+*(Follow-up query returns `"context_retrieved": true` as LangGraph matches context via `pgvector`)*
 
-### 3. Inspect PostgreSQL Vector Database Records
-
-Verify the embeddings stored inside the PostgreSQL container:
-
-```bash
-kubectl exec -it deployment/postgres-deployment -n ai-sandbox -- \
-  psql -U postgres -d aisandbox -c "SELECT id, prompt, left(response, 40) as preview, created_at FROM embeddings_store;"
-```
-
-### 4. Verify LocalStack S3 Storage
-
-List files created in the simulated S3 bucket:
-
+### 3. Verify LocalStack S3 Storage
 ```bash
 AWS_ACCESS_KEY_ID=mock_key AWS_SECRET_ACCESS_KEY=mock_secret AWS_DEFAULT_REGION=us-east-1 \
   aws --endpoint-url=http://localhost:4566 s3 ls s3://ai-agent-storage/
+```
+
+### 4. Inspect Vector Records in PostgreSQL
+```bash
+kubectl exec -it deployment/postgres-deployment -n ai-sandbox -- \
+  psql -U postgres -d aisandbox -c "SELECT id, prompt, left(response, 40) as preview, created_at FROM embeddings_store;"
 ```
 
 ---
@@ -212,15 +152,17 @@ AWS_ACCESS_KEY_ID=mock_key AWS_SECRET_ACCESS_KEY=mock_secret AWS_DEFAULT_REGION=
 ## 📊 Observability & Metrics
 
 ### Prometheus Dashboard
-Open **[http://localhost:9090](http://localhost:9090)** in your browser to query live metrics.
+Open **[http://localhost:9090](http://localhost:9090)** in your browser to inspect live telemetry:
 
-Key metrics available:
-- `http_requests_total`: Request counter for the Go API Gateway (labeled by status code).
-- `http_request_duration_seconds_bucket`: Latency histogram for HTTP requests.
-- `agent_requests_total`: Total prompt requests handled by the LangGraph agent.
-- `agent_graph_node_latency_seconds_bucket`: Execution latency broken down per LangGraph workflow node (`embed_and_retrieve`, `generate`, `persist`).
+| Metric | Target | Description |
+| :--- | :--- | :--- |
+| `http_requests_total` | Go Gateway | Request counter labeled by HTTP status code |
+| `http_request_duration_seconds` | Go Gateway | Latency histogram for HTTP requests |
+| `agent_requests_total` | Python Agent | Total prompt requests handled |
+| `agent_graph_node_latency_seconds` | Python Agent | Latency broken down per LangGraph node (`embed_and_retrieve`, `generate`, `persist`) |
 
-### Query Metrics via CLI
-```bash
-curl -s http://localhost:8080/metrics | grep http_requests_total
-```
+---
+
+## 📜 License
+
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
