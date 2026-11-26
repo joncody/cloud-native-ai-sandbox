@@ -1,6 +1,8 @@
 # Compiled Go binaries and executable outputs
 backend
 app/backend
+go-backend
+app/go-backend
 *.exe
 *.out
 
