@@ -21,11 +21,20 @@ spec:
         - containerPort: 5432
         env:
         - name: POSTGRES_DB
-          value: "aisandbox"
+          valueFrom:
+            secretKeyRef:
+              name: postgres-credentials
+              key: database
         - name: POSTGRES_USER
-          value: "postgres"
+          valueFrom:
+            secretKeyRef:
+              name: postgres-credentials
+              key: username
         - name: POSTGRES_PASSWORD
-          value: "postgres"
+          valueFrom:
+            secretKeyRef:
+              name: postgres-credentials
+              key: password
 ---
 # Internal ClusterIP service exposing PostgreSQL database on port 5432
 apiVersion: v1

@@ -20,15 +20,24 @@ spec:
         imagePullPolicy: Never
         ports:
         - containerPort: 5000
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 3
+          periodSeconds: 5
         env:
         - name: OLLAMA_URL
-          value: "http://172.19.0.1:11434"
+          value: "http://host.docker.internal:11434"
         - name: LOCALSTACK_URL
-          value: "http://172.19.0.1:4566"
+          value: "http://host.docker.internal:4566"
         - name: S3_BUCKET_NAME
           value: "ai-agent-storage"
         - name: POSTGRES_URL
-          value: "postgresql://postgres:postgres@postgres-service:5432/aisandbox"
+          valueFrom:
+            secretKeyRef:
+              name: postgres-credentials
+              key: url
 ---
 # Internal ClusterIP service exposing Python agent on port 5000
 apiVersion: v1
@@ -65,6 +74,12 @@ spec:
         imagePullPolicy: Never
         ports:
         - containerPort: 8080
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 2
+          periodSeconds: 5
         env:
         - name: AGENT_URL
           value: "http://agent-service:5000"

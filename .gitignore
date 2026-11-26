@@ -17,7 +17,12 @@ env/
 .terraform/
 *.tfstate
 *.tfstate.backup
+*.tfplan
 .terraform.lock.hcl
+
+# Packed / scratch dumps
+combined.txt
+repomix-output.xml
 
 # IDE and operating system files
 .DS_Store
